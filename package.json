@@ -1,0 +1,24 @@
+{
+    "name"          : "node-red-contrib-n2n",
+    "version"       : "0.0.1",
+    "description"   : "A Node-RED node that provides automatic links between different topics on Node-RED instances within multicast range.",
+    "dependencies"  : {
+        "msgpack-js": "0.3.0"
+    },
+    "repository" : {
+        "type":"git",
+        "url":"https://github.com/node-red/node-red-nodes/tree/master/io/n2n"
+    },
+    "license": "Apache-2.0",
+    "keywords": [ "node-red", "discovery", "autodiscover", "link", "n2n", "node to node" ],
+    "node-red"      : {
+        "nodes"     : {
+            "autodiscover": "n2n.js"
+        }
+    },
+    "author": {
+        "name": "Dave Conway-Jones",
+        "email": "ceejay@vnet.ibm.com",
+        "url": "http://nodered.org"
+    }
+}

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<!--
+  Copyright 2015,2016 IBM Corp.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<script type="text/x-red" data-template-name="n2n in">
+    <div class="form-row">
+        <label for="node-input-topic" style="width:150px !important"><i class="fa fa-tags"></i> Topics wanted</label>
+        <input type="text" id="node-input-topic" style="width:calc(100% - 155px)" placeholder="regular expression to match. eg .*">
+    </div>
+    <div class="form-row">
+        <label for="node-input-rate" style="width:150px !important"><i class="fa fa-timer"></i> Max Rate</label>
+        1 message every <input type="text" id="node-input-rate" style="width:40px; text-align:end;" placeholder="0.25"> seconds
+    </div>
+    <!-- <div class="form-row">
+        <label style="width:150px !important"> </label>
+        <input type="checkbox" id="node-input-ignore" style="display:inline-block; width:auto; vertical-align:top;">
+        Ignore messages from localhost.
+    </div> -->
+    <div class="form-row">
+        <label for="node-input-iface" style="width:150px !important"><i class="fa fa-random"></i> Network Interface</label>
+        <input type="text" id="node-input-iface" style="width:calc(100% - 200px)" placeholder="( optional e.g. eth0 )">
+        <a id="node-lookup-iface" class="btn"><i id="node-lookup-iface-icon" class="fa fa-search"></i></a>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name" style="width:150px !important"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" style="width:calc(100% - 155px)" placeholder="Name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="n2n in">
+    <p>Automatically receives data from other Node-RED devices on the network on requested topics.</p>
+    <p>You can specify what topics are of interest. The node will "request" these from remote instances.
+    The remote node will only send data if it has a <code>msg.topic</code> that matches.</p>
+    <p>Topics of interest are specified by a <a href="https://developer.mozilla.org/en/docs/Web/JavaScript/Guide/Regular_Expressions" target="_new">regex</a> string.</p>
+    For example<ul>
+        <li>foo|test|bar - contains foo or test or bar</li>
+        <li>^temp - match everything starting with temp</li>
+        <li>C$ - match everything ending with C</li>
+        <li>^[0-9]{3}$ - matches a 3 digit number</li>
+    </ul>
+    <p>The default is to match (ask for) everything.</p>
+    <p>Also outputs <code>msg.host</code> - the hostname of the sending node, and
+    <code>msg.hostip</code> - the ip of the sending node.</p>
+    <p>The <i>Max Rate</i> tells the far end the maximum rate that you wish to receive data. 0 means as fast as possible.</p>
+    <p>The <i>Network Interface</i> for the multicast can be fixed if required. If not it will try
+    to bind to all available interfaces - but may not necessarily route correctly - mostly it does.</p>
+    <p>Also, the MTU may well restrict the message to around 1500 characters or less.
+    Only use this node for short messages like data readings.</p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('n2n in',{
+        category: 'input',
+        color:"azure",
+        defaults: {
+            name: {value:""},
+            topic: {value:""},
+            iface: {value:""},
+            rate: {value:"0",required:true,validate:RED.validators.number()},
+            ignore: {value:true}
+        },
+        inputs:0,
+        outputs:1,
+        icon: "bridge-dash.png",
+        label: function() {
+            return this.name||this.topic||"n2n";
+        },
+        oneditprepare: function() {
+            $("#node-lookup-iface").click(function() {
+                $("#node-lookup-iface").addClass('disabled');
+                $.getJSON('mcastinterfaces',function(data) {
+                    $("#node-lookup-iface").removeClass('disabled');
+                    $("#node-input-iface").autocomplete({
+                        source:data,
+                        minLength:0,
+                        close: function( event, ui ) {
+                            $("#node-input-iface").autocomplete( "destroy" );
+                        }
+                    }).autocomplete("search","");
+                });
+            });
+        }
+    });
+</script>
+
+
+<script type="text/x-red" data-template-name="n2n out">
+    <div class="form-row">
+        <label for="node-input-iface"><i class="fa fa-random"></i> Network Interface</label>
+        <input type="text" id="node-input-iface" placeholder="( optional e.g. eth0 )" style="width:51%">
+        <a id="node-lookup-iface" class="btn"><i id="node-lookup-iface-icon" class="fa fa-search"></i></a>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-tips"><b>Note:</b> It is generally better to bind the outbound node to a specific interface if possible.</div>
+</script>
+
+<script type="text/x-red" data-help-name="n2n out">
+    <p>Sends data to other Node-RED devices on the network that are requesting topics of interest.</p>
+    <p>Data is ONLY sent to the other nodes if it has been requested.
+    Requests are made by matching a <i>regex</i> to the topic - so all messages to be sent should specify a <code>msg.topic</code>.
+    If not the topic will be set to <i>"public"</i>.</p>
+    <p><b>Note:</b> This node uses multicast - which may or may not go through local routers.
+    Also, the MTU may well restrict the message to around 1500 characters.
+    Only use this node for short messages like data readings.</p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('n2n out',{
+        category: 'output',
+        color:"azure",
+        defaults: {
+            iface: {value:""},
+            name: {value:""}
+        },
+        inputs:1,
+        outputs:0,
+        icon: "bridge-dash.png",
+        align: "right",
+        label: function() {
+            return this.name||"n2n";
+        },
+        oneditprepare: function() {
+            $("#node-lookup-iface").click(function() {
+                $("#node-lookup-iface").addClass('disabled');
+                $.getJSON('mcastinterfaces',function(data) {
+                    $("#node-lookup-iface").removeClass('disabled');
+                    $("#node-input-iface").autocomplete({
+                        source:data,
+                        minLength:0,
+                        close: function( event, ui ) {
+                            $("#node-input-iface").autocomplete( "destroy" );
+                        }
+                    }).autocomplete("search","");
+                });
+            });
+        }
+    });
+</script>
