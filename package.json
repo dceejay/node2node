@@ -1,6 +1,6 @@
 {
     "name"          : "node-red-contrib-n2n",
-    "version"       : "0.0.1",
+    "version"       : "0.0.2",
     "description"   : "A Node-RED node that provides automatic links between different topics on Node-RED instances within multicast range.",
     "dependencies"  : {
         "msgpack-js": "0.3.0"

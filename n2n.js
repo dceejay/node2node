@@ -61,24 +61,27 @@ module.exports = function(RED) {
             node.status({fill:"grey",shape:"dot",text:"Master"});
             sock = dgram.createSocket('udp4');  // only use ipv4 for now
             sock.setMaxListeners(0);            // Allow loads of listeners just in case
-            sock.bind(port, function() {        // have to bind before you can enable broadcast...
+            sock.bind(port, node.ifip, function() {        // have to bind before you can enable broadcast...
                 sock.setBroadcast(true);        // turn on broadcast
-                try {
-                    sock.addMembership(addr, node.ifip);  // Add to the multicast group
-                    sock.setMulticastTTL(4);              // set TTL to 4
-                    //sock.setMulticastLoopback(true);      // turn on loopback
-                } catch (e) {
-                    if (e.errno == "EINVAL") {
-                        node.error("Bad Multicast Address");
-                    } else if (e.errno == "ENODEV") {
-                        node.warn("No network device available");
-                    } else {
-                        node.error("Error :" + e.errno);
+                if (!node.bcast) {
+                    try {
+                        sock.addMembership(addr, node.ifip);  // Add to the multicast group
+                        sock.setMulticastTTL(4);              // set TTL to 4
+                        //sock.setMulticastLoopback(true);      // turn on loopback
+                    } catch (e) {
+                        if (e.errno == "EINVAL") {
+                            node.error("Bad Multicast Address");
+                        } else if (e.errno == "ENODEV") {
+                            node.warn("No network device available");
+                        } else {
+                            node.error("Error :" + e.errno);
+                        }
+                        sock.close();
+                        sock = null;
+                        node.tsock = setTimeout(function() { initSock(node); }, tick);
                     }
-                    sock.close();
-                    sock = null;
-                    node.tsock = setTimeout(function() { initSock(node); }, tick);
                 }
+                else { addr = "255.255.255.255"; }
             });
 
             sock.on("listening", function() {
@@ -174,7 +177,7 @@ module.exports = function(RED) {
                     hoop(tick);   // so we can adjust this on the fly
                 }, t);
             }
-            hoop(2000); // kick off announcements fairly quick
+            hoop(2500); // kick off announcements fairly quick
 
         } else {
             node.warn("Socket not open");
@@ -224,6 +227,7 @@ module.exports = function(RED) {
             }
             wants = [];
             wantrates = [];
+            addr = "225.0.18.80";
         });
     }
 
@@ -233,6 +237,7 @@ module.exports = function(RED) {
         this.iface = n.iface || null;
         this.want = n.topic;
         this.rate = Number(n.rate || 0);
+        this.bcast = n.bcast || false;
         wants.push(this.want);
         wantrates.push(this.rate);
         if (n.ignore === false) { ignore = false; }
@@ -343,14 +348,15 @@ module.exports = function(RED) {
     function N2nOutNode(n) {
         RED.nodes.createNode(this, n);
         this.iface = n.iface || null;
+        this.bcast = n.bcast || false;
         var node = this;
         var sent = {};
         //var useKey = "bananaflimflam";
 
         // Delay start to allow any in nodes to start first (seems to work better that way)
-        //setTimeout(function() {
-        if (sock === null) { initSock(node); }  // create socket if in node not already done so
-        //}, 500);
+        setTimeout(function() {
+            if (sock === null) { initSock(node); }  // create socket if in node not already done so
+        }, 0);
 
         // Send Data messages to other links here
         // h = host = hostname of requesting device

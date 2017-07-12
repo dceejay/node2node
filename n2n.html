@@ -35,6 +35,11 @@
         <a id="node-lookup-iface" class="btn"><i id="node-lookup-iface-icon" class="fa fa-search"></i></a>
     </div>
     <div class="form-row">
+        <label style="width:150px !important"> </label>
+        <input type="checkbox" id="node-input-bcast" style="display:inline-block; width:auto; vertical-align:top;">
+        Use UDP broadcast instead of multicast.
+    </div>
+    <div class="form-row">
         <label for="node-input-name" style="width:150px !important"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name" style="width:calc(100% - 155px)" placeholder="Name">
     </div>
@@ -70,7 +75,8 @@
             topic: {value:""},
             iface: {value:""},
             rate: {value:"0",required:true,validate:RED.validators.number()},
-            ignore: {value:true}
+            ignore: {value:true},
+            bcast: {value:false}
         },
         inputs:0,
         outputs:1,
@@ -104,6 +110,11 @@
         <a id="node-lookup-iface" class="btn"><i id="node-lookup-iface-icon" class="fa fa-search"></i></a>
     </div>
     <div class="form-row">
+        <label> </label>
+        <input type="checkbox" id="node-input-bcast" style="display:inline-block; width:auto; vertical-align:top;">
+        Use UDP broadcast instead of multicast.
+    </div>
+    <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
@@ -126,7 +137,8 @@
         color:"azure",
         defaults: {
             iface: {value:""},
-            name: {value:""}
+            name: {value:""},
+            bcast: {value:false}
         },
         inputs:1,
         outputs:0,
