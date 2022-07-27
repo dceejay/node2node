@@ -4,6 +4,8 @@ node-red-contrib-n2n
 A <a href="http://nodered.org" target="_new">Node-RED</a> node that provides
 automatic links between different topics on Node-RED instances within UDP multicast range.
 
+**Only use this for short messages like data readings**.
+
 Install
 -------
 
@@ -21,6 +23,8 @@ where eth0/en0 is the network interface you wish to use.
 
 Usage
 -----
+
+**Only use this for short messages like data readings**.
 
 Discover other Node-RED devices on the network and open channels from them.
 

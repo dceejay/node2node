@@ -1,26 +1,57 @@
-/**
- * Copyright 2015,2016 IBM Corp.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
 
 module.exports = function(RED) {
     "use strict";
+
+    var passPhrase = "";
+    //passPhrase = "bananaisnotaverystrongpassword";
+    var algorithm = "aes-256-cbc-hmac-sha256";
+
     var dgram = require('dgram');
-    var msgpack = require('msgpack-js');
-    //var util = require("util");
-    //var crypto = require('crypto');
+    var msgpack = require('msgpack-lite');
+    var crypto = require('crypto');
     var os = require("os");
+    //console.log(crypto.getCiphers())
+
+    function sizes(cipher) {
+        for (let nkey = 1, niv = 0;;) {
+            try {
+                crypto.createCipheriv(cipher, '.'.repeat(nkey), '.'.repeat(niv));
+                return [nkey, niv];
+            } catch (e) {
+                if (/invalid iv length/i.test(e.message)) { niv += 1; }
+                else if (/invalid key length/i.test(e.message)) { nkey += 1; }
+                else { throw e; }
+            }
+        }
+    }
+
+    function computeKey(cipher, passphrase) {
+        let [nkey, niv] = sizes(cipher);
+        for (let key = '', iv = '', p = '';;) {
+            const h = crypto.createHash('md5');
+            h.update(p, 'hex');
+            h.update(passphrase);
+            p = h.digest('hex');
+            let n, i = 0;
+            n = Math.min(p.length-i, 2*nkey);
+            nkey -= n/2;
+            key += p.slice(i, i+n);
+            i += n;
+            n = Math.min(p.length-i, 2*niv);
+            niv -= n/2;
+            iv += p.slice(i, i+n);
+            i += n;
+            if (nkey+niv === 0) { return [key, iv]; }
+        }
+    }
+
+    var key;
+    if (passPhrase !== "") {
+        let [key, iv] = computeKey(algorithm, passPhrase);
+        key = key.slice(0, 32);
+        iv = iv.slice(0, 16);
+    }
+
     var sock = null;
     var links = {};
     var requests = {};
@@ -30,11 +61,11 @@ module.exports = function(RED) {
     var lno = 0;
     var port = 61880;
     var addr = "225.0.18.80";
-    var ignore = true;
+    var ignore = false;                 // ignore our own messages
     var host = os.hostname();
     var tick = 20 * 1000;               // say hello every... milliseconds
     var agelimit = tick * 3 / 1000;     // check for not seen after 3 x check interval
-    var viz = false;                     // gather data for visualisations
+    var viz = false;                    // gather data for visualisations
 
     var initSock = function(node) {
         node.log("You may need to unblock your firewall for this node to work...");
@@ -61,6 +92,7 @@ module.exports = function(RED) {
             node.status({fill:"grey",shape:"dot",text:"Master"});
             sock = dgram.createSocket('udp4');  // only use ipv4 for now
             sock.setMaxListeners(0);            // Allow loads of listeners just in case
+            if (node.bcast) { node.ifip = "255.255.255.255";}
             sock.bind(port, node.ifip, function() {        // have to bind before you can enable broadcast...
                 sock.setBroadcast(true);        // turn on broadcast
                 if (!node.bcast) {
@@ -81,7 +113,6 @@ module.exports = function(RED) {
                         node.tsock = setTimeout(function() { initSock(node); }, tick);
                     }
                 }
-                else { addr = "255.255.255.255"; }
             });
 
             sock.on("listening", function() {
@@ -111,16 +142,14 @@ module.exports = function(RED) {
             });
 
             sock.on('message', function(message, remote) {
-                //if (useKey) {
-                //decode
-                //buf = [];
-                //var decipher = crypto.createDecipher('aes256', useKey);
-                //buf.push(decipher.update(message));
-                //buf.push(decipher.final());
-                //message = new Buffer.concat(buf);
-                //console.log(message.length, message.toString('hex'));
-                //}
-                ////var data = JSON.parse(message.toString()); // for use without msgpack
+                if (key) {
+                    //decode
+                    console.log("KK",key.length,iv.length,typeof message,message.length,message.toString('hex'));
+                    var decipher = crypto.createDecipheriv(algorithm, key, iv);
+                    message = Buffer.concat([decipher.update(message) , decipher.final()]);
+                    console.log(message.length, message.toString('hex'));
+                }
+                //var data = JSON.parse(message.toString()); // for use without msgpack
                 try {
                     var data = msgpack.decode(message);
                     if (data.hasOwnProperty("w")) {     // it's a hello message as it has "wants"
@@ -153,16 +182,13 @@ module.exports = function(RED) {
                 if (wants.length > 0) {  // Only ask for stuff is we need it. (can still send to others)
                     //var message = new Buffer(JSON.stringify({ h:host, w:wants, l:agelimit})); // for use without msgpack
                     var message = msgpack.encode({h:host, w:wants, r:wantrates, l:agelimit});
-                    //if (useKey) {
-                    // encode (also add to msg send)
-                    //console.log(message.length, message.toString('hex'));
-                    //var buf = [];
-                    //var cipher = crypto.createCipher('aes256', useKey);
-                    //buf.push(cipher.update(message));
-                    //buf.push(cipher.final());
-                    //message = new Buffer.concat(buf);
-                    //console.log(message.length, message.toString('hex'));
-                    //}
+                    if (key) {
+                        //encode (also add to msg send)
+                        //console.log(message.length, message.toString('hex'));
+                        var cipher = crypto.createCipheriv(algorithm, key, iv);
+                        message = Buffer.concat([cipher.update(message),cipher.final()]);
+                        //console.log(message.length, message.toString('hex'));
+                    }
                     sock.send(message, 0, message.length, port, addr, function(err, bytes) {
                         if (err) { node.error("ANE " + err); }
                         else { if (RED.settings.verbose) { console.log("T-ANN " + JSON.stringify({h:host, w:wants, r:wantrates, l:agelimit})); } }
@@ -177,7 +203,7 @@ module.exports = function(RED) {
                     hoop(tick);   // so we can adjust this on the fly
                 }, t);
             }
-            hoop(2500); // kick off announcements fairly quick
+            hoop(2000); // kick off announcements fairly quick
 
         } else {
             node.warn("Socket not open");
@@ -227,7 +253,6 @@ module.exports = function(RED) {
             }
             wants = [];
             wantrates = [];
-            addr = "225.0.18.80";
         });
     }
 
@@ -252,26 +277,22 @@ module.exports = function(RED) {
             if (sock === null) { initSock(node); }  // create socket if out node not already done so
 
             sock.on('message', function(message, remote) {
-                //if (useKey) {
-                //decode
-                //buf = [];
-                //var decipher = crypto.createDecipher('aes256', useKey);
-                //buf.push(decipher.update(message));
-                //buf.push(decipher.final());
-                //message = new Buffer.concat(buf);
-                //console.log(message.length, message.toString('hex'));
-                //}
-                ////var data = JSON.parse(message.toString()); // for use without msgpack
+                if (key) {
+                    //decode
+                    var decipher = crypto.createDecipheriv(algorithm, key, iv);
+                    message = Buffer.concat([decipher.update(message) , decipher.final()]);
+                    //console.log(message.length, message.toString('hex'));
+                }
+                //var data = JSON.parse(message.toString()); // for use without msgpack
                 try {
                     var data = msgpack.decode(message);
                     //if (RED.settings.verbose) { console.log("R-DAT", data); }
                     if (data.hasOwnProperty("w")) {     // it's a hello message as it has "wants" - so ignore it
-                    } else {  // Anything else is a real message...
-
+                    }
+                    else {  // Anything else is a real message...
                         //console.log(data.t,w,node.wants[w]);
                         var re = new RegExp(node.want);
                         if (re.test(data.t)) { // And it's for me
-
                             if (!linksin.hasOwnProperty(remote.address)) {
                                 linksin[remote.address] = {};
                                 linksin[remote.address].h = data.h;
@@ -295,7 +316,6 @@ module.exports = function(RED) {
                                 node.status({fill:(node.links === 0 ? "blue" : "yellow"), shape:"ring", text:node.links + " source" + (node.links === 1 ? "" : "s")});
                                 if (RED.settings.verbose) { console.log("R-TOO SOON for RX", data.h, data.t, parseInt((got[data.h][data.t] + (node.rate * 1000) - Date.now()) / 1000) + "s"); }
                             }
-
                         }
                         //else {
                         //    if (RED.settings.verbose) { console.log("R-SAW " + util.inspect(data, {depth:10})); }
@@ -354,17 +374,21 @@ module.exports = function(RED) {
         //var useKey = "bananaflimflam";
 
         // Delay start to allow any in nodes to start first (seems to work better that way)
-        setTimeout(function() {
-            if (sock === null) { initSock(node); }  // create socket if in node not already done so
-        }, 0);
+        //setTimeout(function() {
+        if (sock === null) { initSock(node); }  // create socket if in node not already done so
+        //}, 500);
 
         // Send Data messages to other links here
         // h = host = hostname of requesting device
         // t = topic = topics of message
         // p = payload = content on message
         node.on("input", function(msg) {
+            if (msg.hasOwnProperty("want")) {
+                wants.push(msg.want);
+                node.log("ASK2 [ " + msg.want + " ]");
+            }
             lno = Object.keys(links).length;
-            if (lno > 0 && sock) {    // only try to send if we have a link to someone and socket exists
+            if (msg.hasOwnProperty("payload") && (lno > 0) && sock) {    // only try to send if we have a link to someone and socket exists
                 if (!msg.hasOwnProperty("topic")) { msg.topic = "public"; } // set a default topic if one doesn't exist
                 if (msg.topic.length === 0) { msg.topic = "public"; } // set a default topic if one doesn't exist
                 //if (RED.settings.verbose) { console.log("T-REQS",requests); }
@@ -378,16 +402,13 @@ module.exports = function(RED) {
                                 if (re.test(msg.topic)) {
                                     //var message = new Buffer(JSON.stringify({ h:host, t:msg.topic, p:msg.payload })); // for use without msgpack
                                     var message = msgpack.encode({ h:host, t:msg.topic, p:msg.payload });
-                                    //if (useKey) {
-                                    ////encoder
-                                    //console.log(message.length, message.toString('hex'));
-                                    //var buf = [];
-                                    //var cipher = crypto.createCipher('aes256', useKey);
-                                    //buf.push(cipher.update(message));
-                                    //buf.push(cipher.final());
-                                    //message = new Buffer.concat(buf);
-                                    //console.log(message.length, message.toString('hex'));
-                                    //}
+                                    if (key) {
+                                        //encoder
+                                        //console.log(message.length, message.toString('hex'));
+                                        var cipher = crypto.createCipheriv(algorithm, key, iv);
+                                        message = Buffer.concat([cipher.update(message),cipher.final()]);
+                                        console.log("T",message.length, message.toString('hex'));
+                                    }
                                     var rate = 9999999;
                                     for (var key in rates) {
                                         if (rates.hasOwnProperty(key) && rates[key].hasOwnProperty(x)) {

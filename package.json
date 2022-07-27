@@ -1,24 +1,35 @@
 {
-    "name"          : "node-red-contrib-n2n",
-    "version"       : "0.0.2",
-    "description"   : "A Node-RED node that provides automatic links between different topics on Node-RED instances within multicast range.",
-    "dependencies"  : {
-        "msgpack-js": "0.3.0"
+    "name": "node-red-contrib-n2n",
+    "version": "1.0.0",
+    "description": "A Node-RED node that provides automatic links between different topics on Node-RED instances within multicast range.",
+    "dependencies": {
+        "msgpack-lite": "^0.1.26"
     },
-    "repository" : {
-        "type":"git",
-        "url":"https://github.com/node-red/node-red-nodes/tree/master/io/n2n"
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/dceejay/node2node/tree/master"
     },
     "license": "Apache-2.0",
-    "keywords": [ "node-red", "discovery", "autodiscover", "link", "n2n", "node to node" ],
-    "node-red"      : {
-        "nodes"     : {
+    "keywords": [
+        "node-red",
+        "discovery",
+        "autodiscover",
+        "link",
+        "n2n",
+        "node to node"
+    ],
+    "node-red": {
+        "version": ">=1.0.0",
+        "nodes": {
             "autodiscover": "n2n.js"
         }
     },
     "author": {
         "name": "Dave Conway-Jones",
-        "email": "ceejay@vnet.ibm.com",
+        "email": "dceejay@gmail.com",
         "url": "http://nodered.org"
+    },
+    "engines": {
+        "node": ">=12"
     }
 }
